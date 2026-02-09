@@ -2,26 +2,113 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+    /* Light Mode - CDR Group */
+    --background: 0 0% 98%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 240 4.8% 95.9%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 147 95% 29%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 4.8% 65.9%;
+    --accent: 147 95% 29%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72.2% 50.6%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 147 95% 29%;
+    --radius: 0.75rem;
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+    /* CDR Custom */
+    --warning: 33 94.5% 44.3%;
+    --warning-foreground: 0 0% 100%;
+    --info: 217 91.2% 53.3%;
+    --info-foreground: 0 0% 100%;
+    --success: 147 95% 29%;
+    --success-foreground: 0 0% 100%;
+
+    --chart-1: 147 100% 50%;
+    --chart-2: 217 91.2% 59.8%;
+    --chart-3: 271 91% 65%;
+    --chart-4: 43 96% 56%;
+    --chart-5: 0 84% 60%;
+  }
+
+  .dark {
+    /* Dark Mode - CDR Group (default) */
+    --background: 0 0% 4%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 6.7%;
+    --card-foreground: 0 0% 100%;
+    --popover: 0 0% 10.2%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 147 100% 50%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 0 0% 10.2%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 10.2%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 147 100% 50%;
+    --accent-foreground: 0 0% 0%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 13.3%;
+    --input: 0 0% 13.3%;
+    --ring: 147 100% 50%;
+
+    /* CDR Custom */
+    --warning: 48 96.5% 53.1%;
+    --warning-foreground: 0 0% 0%;
+    --info: 217 91.2% 59.8%;
+    --info-foreground: 0 0% 100%;
+    --success: 147 100% 50%;
+    --success-foreground: 0 0% 0%;
+
+    --chart-1: 147 100% 50%;
+    --chart-2: 217 91.2% 59.8%;
+    --chart-3: 271 91% 65%;
+    --chart-4: 43 96% 56%;
+    --chart-5: 0 84% 60%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
 }

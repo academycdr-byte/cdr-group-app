@@ -1,0 +1,394 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum Role {
+  ADMIN
+  GESTOR
+  COLABORADOR
+}
+
+enum ClientStatus {
+  ATIVO
+  PAUSADO
+  CHURNED
+  EM_ONBOARDING
+}
+
+enum EcommercePlatform {
+  SHOPIFY
+  WOOCOMMERCE
+  NUVEMSHOP
+  TRAY
+  VTEX
+  OUTRO
+}
+
+enum InvoiceStatus {
+  PENDENTE
+  PAGO
+  ATRASADO
+  CANCELADO
+}
+
+enum ExpenseStatus {
+  PENDENTE
+  PAGO
+  ATRASADO
+}
+
+enum ExpenseCategory {
+  FERRAMENTAS_SAAS
+  SALARIOS
+  COMISSOES
+  IMPOSTOS
+  INFRAESTRUTURA
+  MARKETING
+  OUTROS
+}
+
+enum LeadStage {
+  LEAD_RECEBIDO
+  PRIMEIRO_CONTATO
+  REUNIAO_AGENDADA
+  PROPOSTA_ENVIADA
+  NEGOCIACAO
+  FECHADO_GANHO
+  PERDIDO
+}
+
+enum LeadSource {
+  INDICACAO
+  INSTAGRAM
+  SITE
+  TRAFEGO_PAGO
+  OUTBOUND
+  OUTRO
+}
+
+enum TaskPriority {
+  BAIXA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+enum TaskStatus {
+  A_FAZER
+  EM_ANDAMENTO
+  EM_REVISAO
+  CONCLUIDO
+}
+
+enum TeamMemberRole {
+  TRAFFIC_MANAGER
+  DESIGNER
+  ESPECIALISTA_AUTOMACAO
+  CS_CX
+  FINANCEIRO
+  COMERCIAL
+  CEO
+}
+
+enum RemunerationType {
+  FIXO
+  COMISSAO
+  FIXO_COMISSAO
+}
+
+enum RecurrenceType {
+  MENSAL
+  SEMANAL
+  QUINZENAL
+  ANUAL
+  UNICA
+}
+
+// ============================================
+// MODELS
+// ============================================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  name          String
+  avatarUrl     String?   @map("avatar_url")
+  role          Role      @default(COLABORADOR)
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  teamMember    TeamMember?
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model ServicePlan {
+  id          String   @id @default(uuid())
+  name        String
+  price       Decimal  @db.Decimal(10, 2)
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  clients Client[]
+
+  @@map("service_plans")
+}
+
+model Client {
+  id                  String            @id @default(uuid())
+  companyName         String            @map("company_name")
+  cnpj                String?
+  contactName         String            @map("contact_name")
+  phone               String?
+  email               String?
+  instagram           String?
+  website             String?
+  ecommercePlatform   EcommercePlatform @default(SHOPIFY) @map("ecommerce_platform")
+  niche               String?
+  status              ClientStatus      @default(EM_ONBOARDING)
+  contractStartDate   DateTime?         @map("contract_start_date")
+  contractDurationMonths Int?           @map("contract_duration_months")
+  roasTarget          Decimal?          @db.Decimal(5, 2) @map("roas_target")
+  notes               String?
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+  deletedAt           DateTime?         @map("deleted_at")
+
+  planId              String?           @map("plan_id")
+  plan                ServicePlan?      @relation(fields: [planId], references: [id])
+
+  trafficManagerId    String?           @map("traffic_manager_id")
+  trafficManager      TeamMember?       @relation("TrafficManagerClients", fields: [trafficManagerId], references: [id])
+
+  designerId          String?           @map("designer_id")
+  designer            TeamMember?       @relation("DesignerClients", fields: [designerId], references: [id])
+
+  metrics             ClientMetric[]
+  invoices            Invoice[]
+  interactions        Interaction[]
+  tasks               Task[]
+  commissions         Commission[]
+
+  @@map("clients")
+}
+
+model ClientMetric {
+  id              String   @id @default(uuid())
+  month           DateTime
+  mediaSpend      Decimal  @db.Decimal(12, 2) @map("media_spend")
+  revenue         Decimal  @db.Decimal(12, 2)
+  roas            Decimal  @db.Decimal(8, 2)
+  cpa             Decimal? @db.Decimal(10, 2)
+  cpm             Decimal? @db.Decimal(10, 2)
+  ctr             Decimal? @db.Decimal(5, 2)
+  orders          Int?
+  averageTicket   Decimal? @db.Decimal(10, 2) @map("average_ticket")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  clientId        String   @map("client_id")
+  client          Client   @relation(fields: [clientId], references: [id])
+
+  @@unique([clientId, month])
+  @@map("client_metrics")
+}
+
+model Lead {
+  id              String     @id @default(uuid())
+  companyName     String     @map("company_name")
+  contactName     String     @map("contact_name")
+  phone           String?
+  email           String?
+  instagram       String?
+  source          LeadSource @default(OUTRO)
+  stage           LeadStage  @default(LEAD_RECEBIDO)
+  interestedPlan  String?    @map("interested_plan")
+  potentialValue  Decimal?   @db.Decimal(10, 2) @map("potential_value")
+  notes           String?
+  nextStep        String?    @map("next_step")
+  lostReason      String?    @map("lost_reason")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+  deletedAt       DateTime?  @map("deleted_at")
+
+  responsibleId   String?    @map("responsible_id")
+  responsible     TeamMember? @relation(fields: [responsibleId], references: [id])
+
+  @@map("leads")
+}
+
+model Invoice {
+  id              String        @id @default(uuid())
+  invoiceNumber   String?       @map("invoice_number")
+  amount          Decimal       @db.Decimal(10, 2)
+  status          InvoiceStatus @default(PENDENTE)
+  dueDate         DateTime      @map("due_date")
+  paidDate        DateTime?     @map("paid_date")
+  description     String?
+  isRecurring     Boolean       @default(false) @map("is_recurring")
+  recurrence      RecurrenceType? @default(MENSAL)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  deletedAt       DateTime?     @map("deleted_at")
+
+  clientId        String        @map("client_id")
+  client          Client        @relation(fields: [clientId], references: [id])
+
+  @@map("invoices")
+}
+
+model Expense {
+  id              String          @id @default(uuid())
+  description     String
+  amount          Decimal         @db.Decimal(10, 2)
+  category        ExpenseCategory @default(OUTROS)
+  status          ExpenseStatus   @default(PENDENTE)
+  dueDate         DateTime        @map("due_date")
+  paidDate        DateTime?       @map("paid_date")
+  isRecurring     Boolean         @default(false) @map("is_recurring")
+  recurrence      RecurrenceType? @default(MENSAL)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  deletedAt       DateTime?       @map("deleted_at")
+
+  @@map("expenses")
+}
+
+model CommissionRule {
+  id              String   @id @default(uuid())
+  name            String
+  minRoas         Decimal  @db.Decimal(5, 2) @map("min_roas")
+  maxRoas         Decimal? @db.Decimal(5, 2) @map("max_roas")
+  percentage      Decimal  @db.Decimal(5, 2)
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  commissions     Commission[]
+
+  @@map("commission_rules")
+}
+
+model Commission {
+  id              String   @id @default(uuid())
+  month           DateTime
+  roas            Decimal  @db.Decimal(8, 2)
+  mediaSpend      Decimal  @db.Decimal(12, 2) @map("media_spend")
+  revenue         Decimal  @db.Decimal(12, 2)
+  percentage      Decimal  @db.Decimal(5, 2)
+  amount          Decimal  @db.Decimal(10, 2)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  clientId        String   @map("client_id")
+  client          Client   @relation(fields: [clientId], references: [id])
+
+  teamMemberId    String   @map("team_member_id")
+  teamMember      TeamMember @relation(fields: [teamMemberId], references: [id])
+
+  ruleId          String?  @map("rule_id")
+  rule            CommissionRule? @relation(fields: [ruleId], references: [id])
+
+  @@unique([clientId, teamMemberId, month])
+  @@map("commissions")
+}
+
+model TeamMember {
+  id              String           @id @default(uuid())
+  name            String
+  email           String           @unique
+  phone           String?
+  role            TeamMemberRole   @default(TRAFFIC_MANAGER)
+  admissionDate   DateTime?        @map("admission_date")
+  remunerationType RemunerationType @default(FIXO) @map("remuneration_type")
+  salary          Decimal?         @db.Decimal(10, 2)
+  isActive        Boolean          @default(true) @map("is_active")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  deletedAt       DateTime?        @map("deleted_at")
+
+  userId          String?          @unique @map("user_id")
+  user            User?            @relation(fields: [userId], references: [id])
+
+  trafficClients  Client[]         @relation("TrafficManagerClients")
+  designClients   Client[]         @relation("DesignerClients")
+  leads           Lead[]
+  commissions     Commission[]
+  assignedTasks   Task[]
+
+  @@map("team_members")
+}
+
+model Task {
+  id              String       @id @default(uuid())
+  title           String
+  description     String?
+  priority        TaskPriority @default(MEDIA)
+  status          TaskStatus   @default(A_FAZER)
+  dueDate         DateTime?    @map("due_date")
+  tags            String[]
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  deletedAt       DateTime?    @map("deleted_at")
+
+  clientId        String?      @map("client_id")
+  client          Client?      @relation(fields: [clientId], references: [id])
+
+  assigneeId      String?      @map("assignee_id")
+  assignee        TeamMember?  @relation(fields: [assigneeId], references: [id])
+
+  @@map("tasks")
+}
+
+model Interaction {
+  id              String   @id @default(uuid())
+  type            String
+  content         String
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  clientId        String   @map("client_id")
+  client          Client   @relation(fields: [clientId], references: [id])
+
+  authorId        String?  @map("author_id")
+
+  @@map("interactions")
+}
+
+model Setting {
+  id              String   @id @default(uuid())
+  key             String   @unique
+  value           String
+  category        String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
+
+model Notification {
+  id              String   @id @default(uuid())
+  title           String
+  message         String
+  type            String
+  isRead          Boolean  @default(false) @map("is_read")
+  link            String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  userId          String   @map("user_id")
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}

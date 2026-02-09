@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { getApiUser, unauthorizedResponse } from "@/lib/api-auth";
 
 const clientSchema = z.object({
   companyName: z.string().min(1, "Nome da empresa é obrigatório"),
@@ -25,6 +26,9 @@ const clientSchema = z.object({
 });
 
 export async function GET(request: Request) {
+  const user = await getApiUser();
+  if (!user) return unauthorizedResponse();
+
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const planId = searchParams.get("planId");
@@ -57,6 +61,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const user = await getApiUser();
+  if (!user) return unauthorizedResponse();
+
   try {
     const body = await request.json();
     const data = clientSchema.parse(body);

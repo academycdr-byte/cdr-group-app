@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { getApiUser, unauthorizedResponse } from "@/lib/api-auth";
 
 const updateSchema = z.object({
   clientId: z.string().optional(),
@@ -19,6 +20,9 @@ export async function GET(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
+  const user = await getApiUser();
+  if (!user) return unauthorizedResponse();
+
   const invoice = await prisma.invoice.findUnique({
     where: { id: params.id },
     include: {
@@ -37,6 +41,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const user = await getApiUser();
+  if (!user) return unauthorizedResponse();
+
   try {
     const body = await request.json();
     const data = updateSchema.parse(body);
@@ -76,6 +83,9 @@ export async function DELETE(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
+  const user = await getApiUser();
+  if (!user) return unauthorizedResponse();
+
   await prisma.invoice.update({
     where: { id: params.id },
     data: { deletedAt: new Date() },

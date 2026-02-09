@@ -1,7 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { getApiUser, unauthorizedResponse } from "@/lib/api-auth";
 
 export async function GET(request: Request) {
+  const user = await getApiUser();
+  if (!user) return unauthorizedResponse();
+
   const { searchParams } = new URL(request.url);
   const month = searchParams.get("month"); // YYYY-MM format
 
@@ -28,6 +32,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const user = await getApiUser();
+  if (!user) return unauthorizedResponse();
+
   try {
     const body = await request.json();
     const { month } = body; // YYYY-MM format

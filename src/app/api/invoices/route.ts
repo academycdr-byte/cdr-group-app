@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { getApiUser, unauthorizedResponse } from "@/lib/api-auth";
 
 const invoiceSchema = z.object({
   clientId: z.string().min(1, "Cliente é obrigatório"),
@@ -36,6 +37,9 @@ async function generateInvoiceNumber(): Promise<string> {
 }
 
 export async function GET(request: Request) {
+  const user = await getApiUser();
+  if (!user) return unauthorizedResponse();
+
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const clientId = searchParams.get("clientId");
@@ -69,6 +73,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const user = await getApiUser();
+  if (!user) return unauthorizedResponse();
+
   try {
     const body = await request.json();
     const data = invoiceSchema.parse(body);

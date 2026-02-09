@@ -1,27 +1,16 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { DashboardShell } from "./dashboard-shell";
 
-export default async function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export async function getAuthUser() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/login");
-  }
+  if (!user) redirect("/login");
 
-  // Get or create user profile
-  let profile = await prisma.user.findUnique({
-    where: { id: user.id },
-  });
-
+  let profile = await prisma.user.findUnique({ where: { id: user.id } });
   if (!profile) {
     profile = await prisma.user.create({
       data: {
@@ -33,9 +22,5 @@ export default async function DashboardLayout({
     });
   }
 
-  return (
-    <DashboardShell userName={profile.name} userEmail={profile.email}>
-      {children}
-    </DashboardShell>
-  );
+  return profile;
 }

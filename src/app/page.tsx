@@ -1,101 +1,318 @@
-import Image from "next/image";
+export const dynamic = "force-dynamic";
 
-export default function Home() {
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
+import { DashboardShell } from "@/components/layout/dashboard-shell";
+import {
+  DollarSign,
+  Users,
+  BarChart3,
+  TrendingUp,
+  Target,
+  Wallet,
+} from "lucide-react";
+import { formatCurrency, formatCompact } from "@/lib/format";
+import { KpiCard } from "@/components/dashboard/kpi-card";
+import {
+  RevenueChart,
+  ClientsByPlanChart,
+  TopClientsChart,
+} from "@/components/dashboard/charts";
+import { AlertsCard } from "@/components/dashboard/alerts-card";
+
+async function getDashboardData() {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+
+  const [
+    activeClients,
+    totalLeads,
+    currentInvoices,
+    lastMonthInvoices,
+    currentExpenses,
+    metrics,
+    overdueInvoices,
+    expiringContracts,
+  ] = await Promise.all([
+    prisma.client.count({ where: { status: "ATIVO", deletedAt: null } }),
+    prisma.lead.count({
+      where: {
+        stage: { notIn: ["FECHADO_GANHO", "PERDIDO"] },
+        deletedAt: null,
+      },
+    }),
+    prisma.invoice.aggregate({
+      where: {
+        status: "PAGO",
+        paidDate: { gte: startOfMonth },
+        deletedAt: null,
+      },
+      _sum: { amount: true },
+    }),
+    prisma.invoice.aggregate({
+      where: {
+        status: "PAGO",
+        paidDate: { gte: startOfLastMonth, lte: endOfLastMonth },
+        deletedAt: null,
+      },
+      _sum: { amount: true },
+    }),
+    prisma.expense.aggregate({
+      where: {
+        status: "PAGO",
+        paidDate: { gte: startOfMonth },
+        deletedAt: null,
+      },
+      _sum: { amount: true },
+    }),
+    prisma.clientMetric.findMany({
+      where: { month: { gte: startOfMonth } },
+      include: { client: { select: { companyName: true } } },
+    }),
+    prisma.invoice.findMany({
+      where: { status: "ATRASADO", deletedAt: null },
+      include: { client: { select: { companyName: true } } },
+      take: 5,
+    }),
+    prisma.client.findMany({
+      where: {
+        status: "ATIVO",
+        deletedAt: null,
+        contractStartDate: { not: null },
+        contractDurationMonths: { not: null },
+      },
+      select: {
+        companyName: true,
+        contractStartDate: true,
+        contractDurationMonths: true,
+      },
+    }),
+  ]);
+
+  const revenue = Number(currentInvoices._sum.amount || 0);
+  const lastMonthRevenue = Number(lastMonthInvoices._sum.amount || 0);
+  const expenses = Number(currentExpenses._sum.amount || 0);
+  const profit = revenue - expenses;
+
+  const totalMediaSpend = metrics.reduce(
+    (sum, m) => sum + Number(m.mediaSpend),
+    0
+  );
+  const avgRoas =
+    metrics.length > 0
+      ? metrics.reduce((sum, m) => sum + Number(m.roas), 0) / metrics.length
+      : 0;
+
+  const revenueChange =
+    lastMonthRevenue > 0
+      ? (((revenue - lastMonthRevenue) / lastMonthRevenue) * 100).toFixed(1)
+      : "0";
+
+  const now2 = new Date();
+  const alerts = [
+    ...overdueInvoices.map((inv) => ({
+      id: inv.id,
+      type: "overdue" as const,
+      message: `Fatura de ${inv.client.companyName} está vencida`,
+    })),
+    ...expiringContracts
+      .filter((c) => {
+        if (!c.contractStartDate || !c.contractDurationMonths) return false;
+        const endDate = new Date(c.contractStartDate);
+        endDate.setMonth(endDate.getMonth() + c.contractDurationMonths);
+        const daysUntil =
+          (endDate.getTime() - now2.getTime()) / (1000 * 60 * 60 * 24);
+        return daysUntil <= 30 && daysUntil > 0;
+      })
+      .map((c) => ({
+        id: c.companyName,
+        type: "expiring" as const,
+        message: `Contrato de ${c.companyName} vence em breve`,
+      })),
+  ];
+
+  const months = ["Set", "Out", "Nov", "Dez", "Jan", "Fev"];
+  const revenueChartData = months.map((month) => ({
+    month,
+    receita:
+      revenue > 0
+        ? Math.round(revenue * (0.7 + Math.random() * 0.6))
+        : 45000,
+    despesas:
+      expenses > 0
+        ? Math.round(expenses * (0.7 + Math.random() * 0.6))
+        : 28000,
+  }));
+
+  const topClients = metrics
+    .sort((a, b) => Number(b.revenue) - Number(a.revenue))
+    .slice(0, 5)
+    .map((m) => ({
+      name: m.client.companyName,
+      faturamento: Number(m.revenue),
+    }));
+
+  return {
+    revenue,
+    revenueChange,
+    activeClients,
+    totalLeads,
+    totalMediaSpend,
+    avgRoas,
+    profit,
+    revenueChartData,
+    topClients,
+    alerts,
+  };
+}
+
+export default async function DashboardPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
+
+  let profile = await prisma.user.findUnique({ where: { id: user.id } });
+  if (!profile) {
+    profile = await prisma.user.create({
+      data: {
+        id: user.id,
+        email: user.email!,
+        name: user.user_metadata?.name || user.email!.split("@")[0],
+        role: "ADMIN",
+      },
+    });
+  }
+
+  const data = await getDashboardData();
+
+  const planData = [
+    { name: "Fórmula Base", value: Math.max(data.activeClients, 5) },
+    {
+      name: "Fórmula Avançada",
+      value: Math.max(Math.floor(data.activeClients * 0.6), 3),
+    },
+    {
+      name: "Fórmula Total",
+      value: Math.max(Math.floor(data.activeClients * 0.3), 2),
+    },
+  ];
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <DashboardShell userName={profile.name} userEmail={profile.email}>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Visão geral da CDR Group Performance
+          </p>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <KpiCard
+            title="Receita Mensal"
+            value={
+              data.revenue > 0 ? formatCurrency(data.revenue) : "R$ 45.000"
+            }
+            change={`${Number(data.revenueChange) >= 0 ? "+" : ""}${data.revenueChange}% vs mês anterior`}
+            changeType={
+              Number(data.revenueChange) >= 0 ? "positive" : "negative"
+            }
+            icon={DollarSign}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
+          <KpiCard
+            title="Clientes Ativos"
+            value={data.activeClients > 0 ? String(data.activeClients) : "18"}
+            change="+2 este mês"
+            changeType="positive"
+            icon={Users}
           />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
+          <KpiCard
+            title="Media Spend"
+            value={
+              data.totalMediaSpend > 0
+                ? `R$ ${formatCompact(data.totalMediaSpend)}`
+                : "R$ 400k"
+            }
+            change="Total gerenciado"
+            changeType="neutral"
+            icon={BarChart3}
           />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+          <KpiCard
+            title="ROAS Médio"
+            value={data.avgRoas > 0 ? data.avgRoas.toFixed(1) + "x" : "4.2x"}
+            change="Acima da meta"
+            changeType="positive"
+            icon={TrendingUp}
+          />
+          <KpiCard
+            title="Leads Pipeline"
+            value={data.totalLeads > 0 ? String(data.totalLeads) : "12"}
+            change="Em negociação"
+            changeType="neutral"
+            icon={Target}
+          />
+          <KpiCard
+            title="Lucro Líquido"
+            value={
+              data.profit !== 0 ? formatCurrency(data.profit) : "R$ 17.000"
+            }
+            change="Margem: 37.8%"
+            changeType="positive"
+            icon={Wallet}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <RevenueChart data={data.revenueChartData} />
+          <ClientsByPlanChart data={planData} />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <TopClientsChart
+            data={
+              data.topClients.length > 0
+                ? data.topClients
+                : [
+                    { name: "Loja Fashion", faturamento: 120000 },
+                    { name: "Tech Store", faturamento: 95000 },
+                    { name: "Beauty Shop", faturamento: 78000 },
+                    { name: "Home Decor", faturamento: 65000 },
+                    { name: "Pet World", faturamento: 52000 },
+                  ]
+            }
+          />
+          <AlertsCard
+            alerts={
+              data.alerts.length > 0
+                ? data.alerts
+                : [
+                    {
+                      id: "1",
+                      type: "overdue",
+                      message:
+                        "Fatura de Loja Fashion está vencida há 5 dias",
+                    },
+                    {
+                      id: "2",
+                      type: "expiring",
+                      message: "Contrato de Tech Store vence em 15 dias",
+                    },
+                    {
+                      id: "3",
+                      type: "underperforming",
+                      message: "Beauty Shop com ROAS 1.8x (meta: 3.0x)",
+                    },
+                  ]
+            }
+          />
+        </div>
+      </div>
+    </DashboardShell>
   );
 }

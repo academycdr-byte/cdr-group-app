@@ -42,8 +42,8 @@ export async function GET() {
 
   // Test 2: User table
   try {
-    const count = await prisma.user.count();
-    checks.users = { status: "ok", count };
+    const users = await prisma.user.findMany({ select: { id: true, email: true, name: true, role: true } });
+    checks.users = { status: "ok", count: users.length, data: users };
   } catch (error) {
     checks.users = { status: "error", message: error instanceof Error ? error.message : String(error) };
   }

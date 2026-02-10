@@ -170,6 +170,25 @@ async function getDashboardData() {
 }
 
 export default async function DashboardPage() {
+  try {
+    return await renderDashboard();
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : "";
+    return (
+      <div style={{ padding: 40, fontFamily: "monospace" }}>
+        <h1 style={{ color: "red" }}>DEBUG ERROR</h1>
+        <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{msg}</pre>
+        <details>
+          <summary>Stack trace</summary>
+          <pre style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{stack}</pre>
+        </details>
+      </div>
+    );
+  }
+}
+
+async function renderDashboard() {
   const supabase = await createClient();
   const {
     data: { user },

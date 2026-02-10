@@ -179,14 +179,24 @@ export default async function DashboardPage() {
 
   let profile = await prisma.user.findUnique({ where: { id: user.id } });
   if (!profile) {
-    profile = await prisma.user.create({
-      data: {
-        id: user.id,
-        email: user.email!,
-        name: user.user_metadata?.name || user.email!.split("@")[0],
-        role: "ADMIN",
-      },
-    });
+    // Check if user exists by email (ID mismatch between Supabase and DB)
+    profile = await prisma.user.findUnique({ where: { email: user.email! } });
+    if (profile) {
+      // Link existing profile to Supabase auth ID
+      profile = await prisma.user.update({
+        where: { email: user.email! },
+        data: { id: user.id },
+      });
+    } else {
+      profile = await prisma.user.create({
+        data: {
+          id: user.id,
+          email: user.email!,
+          name: user.user_metadata?.name || user.email!.split("@")[0],
+          role: "ADMIN",
+        },
+      });
+    }
   }
 
   const data = await getDashboardData();

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -6,7 +7,29 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const checks: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
+    env: {
+      SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || "NOT SET",
+      SUPABASE_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        ? "SET (" + process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.length + " chars)"
+        : "NOT SET",
+    },
   };
+
+  // Test 0: Supabase auth
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.getUser();
+    checks.supabaseAuth = {
+      status: error ? "error" : "ok",
+      hasUser: !!data?.user,
+      error: error?.message,
+    };
+  } catch (error) {
+    checks.supabaseAuth = {
+      status: "error",
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
 
   // Test 1: Basic connection
   try {
